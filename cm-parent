@@ -1,0 +1,50 @@
+#!/bin/sh
+
+parents=`git show --summary --format="%P" $1`
+parents_count=`echo $parents | wc -w`
+
+commit=$1
+
+
+simple_merge()
+{
+
+    
+}
+
+#75c104b13a27f5ee1a4d53b58c6a832b0b0bb0d8 : Merge commit
+select_parent_to_commit()
+{
+    parents_array=$(echo $2 | tr ";" "\n")
+
+    common_ancestor=`git merge-base $2`
+    echo $common_ancestor
+
+    if [ "$common_ancestor" -eq "$parents_array[0]"]; then
+        echo "git cherry-pick -m 1 ...."
+        exit 0
+    fi
+
+    if [ "$common_ancestor" -eq "$parents_array[1]"]; then
+        echo "git cherry-pick -m 2 ...."
+        exit 0
+    fi
+
+    
+
+    
+    for parent in $parents_array
+    do
+        echo "> [$parent]"
+    done
+}
+
+if [ $parents_count -gt 1 ]; then
+    echo "Merge commit"
+
+    select_parent_to_commit $commit "$parents"
+else
+    echo "Regular commit"
+fi
+
+#cherry pick $commit
