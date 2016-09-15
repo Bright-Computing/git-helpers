@@ -1,0 +1,152 @@
+#!/bin/sh
+set -e
+
+USAGE="\
+git bc-cherry-pick
+
+Interactively cherry-pick a commit onto the current branch (Bright flavoured)
+
+Usage:
+    git bc-cherry-pick [options] <commit-id>
+
+Options:
+    -c, --commit        Commit directly if no errors are found
+    --dry-run           Review commands to be executed
+"
+SCRIPT=`realpath $0`
+DIR=`dirname $SCRIPT`
+CHERRY_PICK_OPTIONS="-x"
+
+. $DIR/_git-bc-env
+
+DRY_RUN=0
+COMMIT=0
+
+while [ $# -gt 0 ]; do
+    ARG=$1
+    case "$ARG" in
+    --help|-h)
+        HELP=1
+        ;;
+    --commit|-c)
+        COMMIT=1
+        ;;
+    --dry-run)
+        DRY_RUN=1
+        ;;
+    --*)
+        die "unrecognised option: $ARG" ;;
+    *)
+        COMMIT_ID=$1
+        ;;
+    esac
+    shift
+done
+
+if [ "$HELP" -eq 1 ] || [ -z "$COMMIT_ID" ]; then
+    usage
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    exec_cmd()
+    {
+        echo $@
+    }
+else
+    exec_cmd()
+    {
+        $@
+    }
+fi
+if [ "$COMMIT" -ne 1 ]; then
+    CHERRY_PICK_OPTIONS="$CHERRY_PICK_OPTIONS --no-commit"
+fi
+
+
+PARENTS=`git show --summary --format="%P" $COMMIT_ID | head -1`
+PARENTS_ARRAY=`echo $PARENTS | tr ";" "\n"`
+PARENTS_COUNT=`echo $PARENTS | wc -w`
+
+if [ "$PARENTS_COUNT" -gt 2 ]; then
+    echo "Number of parents greater than 2 is unsupported"
+    echo "    parents: $PARENTS"
+    exit 1
+fi
+
+if [ "$PARENTS_COUNT" -eq 1 ]; then
+    echo "This is a regular commit => regular cherry-pick"
+    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS $COMMIT_ID
+    exit 0
+fi
+
+echo "This is a merge commit"
+COMMON_ANCESTOR=`git merge-base $PARENTS`
+
+COUNT=1
+for PARENT in $PARENTS_ARRAY; do
+    if [ "$PARENT" = "$COMMON_ANCESTOR" ]; then
+        MAINLINE=COUNTER
+        break;
+    fi
+    COUNTER=$(($COUNTER+1))
+done
+if [ ! -z "$MAINLINE" ]; then
+    echo "This is an empty merge commit => the branch to apply is implicit"
+    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+    exit 0
+fi
+
+PROMPT="\
+
+Select one option to review the state or the branch to apply:
+    graph)      review the commit graph
+    commits)    review the list of commits
+    diff)       review the diff
+    1|2)        select the branch 1 or 2 for the cherry-pick
+    quit)       abort
+"
+while true; do
+    echo "$PROMPT"
+    read -p "Selection (g/c/d/q) " SEL
+    case "$SEL" in
+        [gG]|graph|GRAPH)
+            git bc-log "$COMMON_ANCESTOR..$COMMIT_ID"
+            ;;
+        [cC]|commits|COMMITS)
+            COUNTER=1
+            for PARENT in $PARENTS_ARRAY; do
+                echo "Branch $COUNTER:"
+                git log --oneline "$COMMON_ANCESTOR..$PARENT"
+                echo ""
+                COUNTER=$(($COUNTER+1))
+            done
+            ;;
+        [dD]|diff|DIFF)
+            COUNTER=1
+            for PARENT in $PARENTS_ARRAY; do
+                echo "Branch $COUNTER:"
+                git diff "$COMMON_ANCESTOR..$PARENT"
+                echo ""
+                COUNTER=$(($COUNTER+1))
+            done
+            ;;
+        1)
+            MAINLINE=2
+            break;
+            ;;
+        2)
+            MAINLINE=1
+            break;
+            ;;
+        [qQ]|quit|QUIT)
+            echo "Aborting"
+            exit 1
+            ;;
+        *)
+            echo "Invalid selection"
+            ;;
+    esac
+done
+
+echo "Apply commits with mainline $MAINLINE"
+exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
