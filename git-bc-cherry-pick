@@ -13,7 +13,7 @@ Options:
     -c, --commit        Commit directly if no errors are found
     --dry-run           Review commands to be executed
 "
-SCRIPT=`realpath $0`
+SCRIPT=`readlink -f $0`
 DIR=`dirname $SCRIPT`
 CHERRY_PICK_OPTIONS="-x"
 
