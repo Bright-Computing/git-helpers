@@ -97,17 +97,17 @@ if [ ! -z "$MAINLINE" ]; then
 fi
 
 PROMPT="\
-
 Select one option to review the state or the branch to apply:
     graph)      review the commit graph
     commits)    review the list of commits
     diff)       review the diff
-    1|2)        select the branch 1 or 2 for the cherry-pick
+    1|2)        select the branch to be applied (1 or 2)
+    help)       show this message
     quit)       abort
 "
+echo "$PROMPT"
 while true; do
-    echo "$PROMPT"
-    read -p "Selection (g/c/d/q) " SEL
+    read -p "Selection (<NUM>/g/c/d/h/q) " SEL
     case "$SEL" in
         [gG]|graph|GRAPH)
             git bc-log "$COMMON_ANCESTOR..$COMMIT_ID"
@@ -137,6 +137,9 @@ while true; do
         2)
             MAINLINE=1
             break;
+            ;;
+        [hH]|help|HELP)
+            echo "$PROMPT"
             ;;
         [qQ]|quit|QUIT)
             echo "Aborting"
