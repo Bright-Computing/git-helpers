@@ -110,7 +110,7 @@ while true; do
     read -p "Selection (<NUM>/g/c/d/h/q) " SEL
     case "$SEL" in
         [gG]|graph|GRAPH)
-            git bc-log "$COMMON_ANCESTOR..$COMMIT_ID"
+            git bc-log "$COMMON_ANCESTOR^..$COMMIT_ID"
             ;;
         [cC]|commits|COMMITS)
             COUNTER=1
