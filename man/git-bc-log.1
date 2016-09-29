@@ -1,0 +1,36 @@
+.\" generated with Ronn/v0.7.3
+.\" http://github.com/rtomayko/ronn/tree/0.7.3
+.
+.TH "GIT\-BC\-LOG" "1" "2016-09-29" "" ""
+.
+.SH "NAME"
+\fBgit\-bc\-log\fR \- Show text\-based graph logs
+.
+.SH "SYNOPSIS"
+\fBgit bc\-log\fR [\fIoptions\fR] [\fIrevision range\fR] [[\-\-] \fIpath\fR\.\.\.]
+.
+.SH "DESCRIPTION"
+Show text\-based graph logs\.
+.
+.P
+The command adds options to the builtin git\-log(1) command to prettify the output as a graph\. All options of \fBgit log\fR are also applicable for this command\. Please refer to git\-log(1) for additional options\.
+.
+.SH "OPTIONS"
+.
+.TP
+\fB\-a\fR, \fB\-\-all\fR
+Show all the branches in the log\.
+.
+.TP
+\fB<revision range>\fR
+Show only commits in the specified revision range\. When no \fB<revision\-range>\fR is specified, it defaults to HEAD (i\.e\. the whole history leading to the current commit)\. For a complete list of ways to spell \fB<revision range>\fR, see gitrevisions(7)\.
+.
+.TP
+\fB[\-\-] <path>\.\.\.\fR
+Show only commits that are enough to explain how the files that match the specified paths came to be\.
+.
+.IP
+Paths may need to be prefixed with "\-\-" to separate them from options or the revision range, when confusion arises\.
+.
+.SH "SEE ALSO"
+git\-log(1)

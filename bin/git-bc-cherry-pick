@@ -4,7 +4,9 @@ set -e
 USAGE="\
 git bc-cherry-pick
 
-Interactively cherry-pick a commit onto the current branch (Bright flavoured)
+Interactively cherry-pick a commit onto the current branch. In presence of
+unambiguous parents, it does not ask user intervention. By default it does
+not commit, but only stages changes.
 
 Usage:
     git bc-cherry-pick [options] <commit-id>

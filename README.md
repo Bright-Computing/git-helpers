@@ -4,6 +4,15 @@ Bright git
 This repository contains additional git commands, that help us with our
 development workflow.
 
+Build
+-----
+
+To update man pages, use `ronn`:
+
+```
+ronn --roff man/*.ronn
+```
+
 Install
 -------
 
