@@ -38,8 +38,8 @@ to abort the cherry-pick.
 
 If conflicts arise, you will need to resolve them by editing the files and
 adding them with git-add(1) and continue the cherry-pick with git-cherry-pick(1)
-with the `--continue` option. You can use git-status(1) to be guided trough this
-process.
+with the `--continue` option. You can use git-status(1) to be guided through
+this process.
 
 ## OPTIONS
 
