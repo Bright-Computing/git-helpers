@@ -118,7 +118,7 @@ while true; do
             COUNTER=1
             for PARENT in $PARENTS_ARRAY; do
                 echo "Branch $COUNTER:"
-                git log --oneline "$COMMON_ANCESTOR..$PARENT"
+                git --no-pager log --oneline "$COMMON_ANCESTOR..$PARENT"
                 echo ""
                 COUNTER=$(($COUNTER+1))
             done
@@ -127,7 +127,7 @@ while true; do
             COUNTER=1
             for PARENT in $PARENTS_ARRAY; do
                 echo "Branch $COUNTER:"
-                git diff "$COMMON_ANCESTOR..$PARENT"
+                git --no-pager diff "$COMMON_ANCESTOR..$PARENT"
                 echo ""
                 COUNTER=$(($COUNTER+1))
             done
