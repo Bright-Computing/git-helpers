@@ -43,8 +43,8 @@ this process.
 
 ## OPTIONS
 
-  * `-c`, `--commit`:
-    Commits the changes if the cherry-pick succedes.
+  * `-n`, `--no-commit`:
+    Stage changes if the cherry-pick succedes, but do not commit.
 
   * `--dry-run`:
     Do not actually execute the git commands, but only print them.
@@ -89,14 +89,14 @@ the release branch will be this in all the examples:
 
 If you want to cherry-pick the commit F:
 
-    $ git bc-cherry-pick --commit F
+    $ git bc-cherry-pick F
 
     The command will simply cherry pick the commit and create I, without user
     interaction.
 
 If you want to cherry-pick the commit B:
 
-    $ git bc-cherry-pick --commit B
+    $ git bc-cherry-pick B
 
     The command will simply cherry pick the commit and create I, without user
     interaction. This is possible because she branch to select is unambiguosly
@@ -106,7 +106,7 @@ If you want to cherry-pick the commit B:
 If you want to cherry-pick the commit D, with the commits introduced in the
 feature branch:
 
-    $ git bc-cherry-pick --commit D
+    $ git bc-cherry-pick D
 
     The command will stop asking user interaction, because it doesn't know which
     branch to apply. The choice is between commits E, F, or B, C. In this case

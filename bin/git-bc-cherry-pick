@@ -5,14 +5,14 @@ USAGE="\
 git bc-cherry-pick
 
 Interactively cherry-pick a commit onto the current branch. In presence of
-unambiguous parents, it does not ask user intervention. By default it does
-not commit, but only stages changes.
+unambiguous parents, it does not ask user intervention. By default it also
+commits.
 
 Usage:
     git bc-cherry-pick [options] <commit-id>
 
 Options:
-    -c, --commit        Commit directly if no errors are found
+    -n, --no-commit     Stage changes but do not commit
     --dry-run           Review commands to be executed
 "
 SCRIPT=`readlink -f $0`
@@ -22,7 +22,7 @@ CHERRY_PICK_OPTIONS="-x"
 . $DIR/bc-env.sh
 
 DRY_RUN=0
-COMMIT=0
+COMMIT=1
 
 while [ $# -gt 0 ]; do
     ARG=$1
@@ -30,8 +30,8 @@ while [ $# -gt 0 ]; do
     --help|-h)
         HELP=1
         ;;
-    --commit|-c)
-        COMMIT=1
+    --no-commit|-n)
+        COMMIT=0
         ;;
     --dry-run)
         DRY_RUN=1

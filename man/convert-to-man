@@ -1,0 +1,13 @@
+#!/bin/sh
+
+gen_man() {
+    input=$1
+    output="man1/$(basename $input .md)"
+    title="$(basename $input .1.md)"
+    pandoc -s -t man "$input" -o "$output"
+    sed -i "s/\\.TH.*/.TH \"$title\" \"1\"/g" "$output"
+}
+
+for f in ./*.md; do
+    gen_man "$f"
+done
