@@ -46,6 +46,11 @@ this process.
   * `-n`, `--no-commit`:
     Stage changes if the cherry-pick succedes, but do not commit.
 
+  * `-s <commit>`, `--select <commit>`:
+    Select this commit as the parent to apply in the cherry-pick. This option
+    is meaningful only when the commit to cherry-pick is a merge and the branch
+    to apply is ambiguous.
+
   * `--dry-run`:
     Do not actually execute the git commands, but only print them.
 
@@ -122,6 +127,14 @@ feature branch:
     F message 4
 
     In this case we need to input `2` to select the second branch.
+
+If you don't want to use the interactive mode and you already know which parent
+to apply, you can specify it with the `--select` option:
+
+    $ git bc-cherry-pick -s E D
+
+    The command will cherry-pick the the second branch, because E is the first
+    commit of that branch.
 
 ## SEE ALSO
 

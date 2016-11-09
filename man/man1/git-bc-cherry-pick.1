@@ -50,6 +50,10 @@ If conflicts arise, you will need to resolve them by editing the files and addin
 Stage changes if the cherry\-pick succedes, but do not commit\.
 .
 .TP
+\fB\-s <commit>\fR, \fB\-\-select <commit>\fR
+Select this commit as the parent to apply in the cherry\-pick\. This option is meaningful only when the commit to cherry\-pick is a merge and the branch to apply is ambiguous\.
+.
+.TP
 \fB\-\-dry\-run\fR
 Do not actually execute the git commands, but only print them\.
 .
@@ -166,6 +170,22 @@ E message 3
 F message 4
 
 In this case we need to input `2` to select the second branch\.
+.
+.fi
+.
+.IP "" 0
+.
+.P
+If you don\'t want to use the interactive mode and you already know which parent to apply, you can specify it with the \fB\-\-select\fR option:
+.
+.IP "" 4
+.
+.nf
+
+$ git bc\-cherry\-pick \-s E D
+
+The command will cherry\-pick the the second branch, because E is the first
+commit of that branch\.
 .
 .fi
 .

@@ -12,8 +12,9 @@ Usage:
     git bc-cherry-pick [options] <commit-id>
 
 Options:
-    -n, --no-commit     Stage changes but do not commit
-    --dry-run           Review commands to be executed
+    -n, --no-commit         Stage changes but do not commit
+    -s, --select COMMIT     The parent commit to select
+    --dry-run               Review commands to be executed
 "
 SCRIPT=`readlink -f $0`
 DIR=`dirname $SCRIPT`
@@ -32,6 +33,13 @@ while [ $# -gt 0 ]; do
         ;;
     --no-commit|-n)
         COMMIT=0
+        ;;
+    --select|-s)
+        shift
+        SELECTED=$1
+        ;;
+    --select=*)
+        SELECTED=${1#*=}
         ;;
     --dry-run)
         DRY_RUN=1
@@ -60,7 +68,7 @@ else
         $@
     }
 fi
-if [ "$COMMIT" -ne 1 ]; then
+if [ "$COMMIT" -eq 0 ]; then
     CHERRY_PICK_OPTIONS="$CHERRY_PICK_OPTIONS --no-commit"
 fi
 
@@ -77,6 +85,9 @@ fi
 
 if [ "$PARENTS_COUNT" -eq 1 ]; then
     echo "This is a regular commit => regular cherry-pick"
+    if [ ! -z "$SELECTED" ]; then
+        echo "Note: ignored selected commit because the cherry-pick was not ambiguous"
+    fi
     exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS $COMMIT_ID
     exit 0
 fi
@@ -94,6 +105,31 @@ for PARENT in $PARENTS_ARRAY; do
 done
 if [ ! -z "$MAINLINE" ]; then
     echo "This is an empty merge commit => the branch to apply is implicit"
+    if [ ! -z "$SELECTED" ]; then
+        echo "Note: ignored selected commit because the cherry-pick was not ambiguous"
+    fi
+    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+    exit 0
+fi
+
+if [ ! -z "$SELECTED" ]; then
+    echo "Try to cherry-pick using the parent $SELECTED"
+    COUNTER=1
+    for PARENT in $PARENTS_ARRAY; do
+        if [[ "$PARENT" = $SELECTED* ]]; then
+            PARENT_INDEX=$COUNTER
+            break;
+        fi
+        COUNTER=$(($COUNTER+1))
+    done
+    if [ -z "$PARENT_INDEX" ]; then
+        die "Error: $SELECTED is not among $COMMIT_ID parents, cannot select it"
+    fi
+    if [ "$PARENT_INDEX" -eq 1 ]; then
+        MAINLINE=2
+    else
+        MAINLINE=1
+    fi
     exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
     exit 0
 fi
