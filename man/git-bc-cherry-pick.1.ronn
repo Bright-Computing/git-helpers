@@ -108,10 +108,10 @@ feature branch:
 
     $ git bc-cherry-pick D
 
-    The command will stop asking user interaction, because it doesn't know which
-    branch to apply. The choice is between commits E, F, or B, C. In this case
-    we want E, F. To do so, we get the branch number by selecting `c` in the
-    selection prompt. The outupt will be this:
+    The command will stop and ask for user interaction, because it doesn't know
+    which branch to apply. The choice is between commits E, F, or B, C. In this
+    case we want E, F. To help us on selecting the branch we can review their
+    contents by selecting `c` in the prompt. The outupt will be this:
 
     Branch 1:
     C message 2
