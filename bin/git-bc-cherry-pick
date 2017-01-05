@@ -95,10 +95,10 @@ fi
 echo "This is a merge commit"
 COMMON_ANCESTOR=`git merge-base $PARENTS`
 
-COUNT=1
+COUNTER=1
 for PARENT in $PARENTS_ARRAY; do
     if [ "$PARENT" = "$COMMON_ANCESTOR" ]; then
-        MAINLINE=COUNTER
+        MAINLINE=$COUNTER
         break;
     fi
     COUNTER=$(($COUNTER+1))
