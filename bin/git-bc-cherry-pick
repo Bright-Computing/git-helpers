@@ -74,12 +74,12 @@ fi
 if [ "$DRY_RUN" -eq 1 ]; then
     exec_cmd()
     {
-        echo $@
+        echo "$@"
     }
 else
     exec_cmd()
     {
-        $@
+        "$@"
     }
 fi
 if [ "$COMMIT" -eq 0 ]; then
@@ -88,7 +88,7 @@ fi
 
 
 PARENTS=`git show --summary --format="%P" $COMMIT_ID | head -1`
-PARENTS_ARRAY=`echo $PARENTS | tr ";" "\n"`
+PARENTS_ARRAY=(`echo $PARENTS | tr ";" "\n"`)
 PARENTS_COUNT=`echo $PARENTS | wc -w`
 
 if [ "$PARENTS_COUNT" -gt 2 ]; then
@@ -106,11 +106,37 @@ if [ "$PARENTS_COUNT" -eq 1 ]; then
     exit 0
 fi
 
+cherrypick_merge() {
+    set +e
+    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+    RET=$?
+    set -e
+
+    if [ "$MAINLINE" -eq 1 ]; then
+        INDEX=1
+    else
+        INDEX=0
+    fi
+
+    CHILDREN_LIST=`git --no-pager log --oneline "$COMMON_ANCESTOR..${PARENTS_ARRAY[$INDEX]}" --no-abbrev-commit | sed 's/\([^ ]*\) .*/(with child \1)/'`
+    if [ "$RET" -ne 0 ] || [ "$COMMIT" -eq 0 ]; then
+        if [ "$DRY_RUN" -eq 0 ]; then
+            echo "$CHILDREN_LIST" >> .git/MERGE_MSG
+        fi
+        exit $RET
+    fi
+
+    OLD_MESSAGE=`git log -n 1 --format=%B`
+    MESSAGE=`printf "${OLD_MESSAGE}\n${CHILDREN_LIST}"`
+
+    exec_cmd git commit --amend -m "${MESSAGE}"
+}
+
 echo "This is a merge commit"
 COMMON_ANCESTOR=`git merge-base $PARENTS`
 
 COUNTER=1
-for PARENT in $PARENTS_ARRAY; do
+for PARENT in ${PARENTS_ARRAY[@]}; do
     if [ "$PARENT" = "$COMMON_ANCESTOR" ]; then
         MAINLINE=$COUNTER
         break;
@@ -122,14 +148,14 @@ if [ ! -z "$MAINLINE" ]; then
     if [ ! -z "$SELECTED" ]; then
         echo "Note: ignored selected commit because the cherry-pick was not ambiguous"
     fi
-    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+    cherrypick_merge
     exit 0
 fi
 
 if [ ! -z "$SELECTED" ]; then
     echo "Try to cherry-pick using the parent $SELECTED"
     COUNTER=1
-    for PARENT in $PARENTS_ARRAY; do
+    for PARENT in ${PARENTS_ARRAY[@]}; do
         if [[ "$PARENT" = $SELECTED* ]]; then
             PARENT_INDEX=$COUNTER
             break;
@@ -144,7 +170,8 @@ if [ ! -z "$SELECTED" ]; then
     else
         MAINLINE=1
     fi
-    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+
+    cherrypick_merge
     exit 0
 fi
 
@@ -166,7 +193,7 @@ while true; do
             ;;
         [cC]|commits|COMMITS)
             COUNTER=1
-            for PARENT in $PARENTS_ARRAY; do
+            for PARENT in ${PARENTS_ARRAY[@]}; do
                 echo "Branch $COUNTER:"
                 git --no-pager log --oneline "$COMMON_ANCESTOR..$PARENT"
                 echo ""
@@ -175,7 +202,7 @@ while true; do
             ;;
         [dD]|diff|DIFF)
             COUNTER=1
-            for PARENT in $PARENTS_ARRAY; do
+            for PARENT in ${PARENTS_ARRAY[@]}; do
                 echo "Branch $COUNTER:"
                 git --no-pager diff "$COMMON_ANCESTOR..$PARENT"
                 echo ""
@@ -204,4 +231,4 @@ while true; do
 done
 
 echo "Apply commits with mainline $MAINLINE"
-exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS -m $MAINLINE $COMMIT_ID
+cherrypick_merge
