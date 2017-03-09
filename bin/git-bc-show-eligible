@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+
+import pygit2
+import re
+import argparse
+import sys
+
+
+def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
+    base_id = repo.merge_base(from_commit.id, to_commit.id)
+
+    cherrypick_re = re.compile('(cherry picked from commit|with child) ([0-9a-fA-F]+)')
+    cherrypicked_commits = set()
+
+    for commit in repo.walk(to_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
+        if commit.id == base_id:
+            break
+
+        for match in cherrypick_re.findall(commit.message):
+            cherrypicked_commits.add(match[1])
+
+    user_name = repo.config.get_multivar('user.name').next()
+    user_email = repo.config.get_multivar('user.email').next()
+
+    for commit in repo.walk(from_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
+        # we walk from newest commits to oldest
+        if commit.id == base_id:
+            break
+
+        if str(commit.id) not in cherrypicked_commits and \
+                (show_all or commit.author.name == user_name or
+                 commit.author.email == user_email):
+            yield(commit)
+
+        if since_commit and commit.id == since_commit.id:
+            break
+
+parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
+parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against')
+parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
+                    default='HEAD', nargs='?')
+parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
+parser.add_argument('--all', action='store_true', help='Show commits from all users')
+
+args = parser.parse_args()
+repo = pygit2.Repository('.')
+
+try:
+    from_commit = repo.revparse_single(args.branch)
+except:
+    print('Invalid branch %s' % args.branch)
+    sys.exit(1)
+
+try:
+    to_commit = repo.revparse_single(args.target_branch)
+except:
+    print('Invalid target branch %s' % args.target_branch)
+    sys.exit(1)
+
+if not repo.merge_base(from_commit.id, to_commit.id):
+    print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
+    sys.exit(1)
+
+since_commit = None
+if args.since:
+    try:
+        since_commit = repo.revparse_single(args.since)
+    except:
+        print('Invalid since %s' % args.since)
+        sys.exit(1)
+
+author_format_str = ' | %s <%s>'
+commit_format_str = '%s %s%s'
+
+if sys.stdout.isatty():
+    author_format_str = ' \033[31m| %s <%s>\033[0m'
+    commit_format_str = '\033[33m%s\033[0m %s%s'
+
+for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
+    author_info = ''
+    if args.all:
+        author_info = author_format_str % (commit.author.name, commit.author.email)
+
+    print(commit_format_str % (str(commit.id), commit.message[:commit.message.index('\n')],
+                               author_info))
