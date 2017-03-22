@@ -19,8 +19,13 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         for match in cherrypick_re.findall(commit.message):
             cherrypicked_commits.add(match[1])
 
-    user_name = repo.config.get_multivar('user.name').next()
-    user_email = repo.config.get_multivar('user.email').next()
+    user_name = None
+    user_email = None
+    try:
+        user_name = repo.config.get_multivar('user.name').next()
+        user_email = repo.config.get_multivar('user.email').next()
+    except StopIteration:
+        pass
 
     for commit in repo.walk(from_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
         # we walk from newest commits to oldest
