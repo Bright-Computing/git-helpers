@@ -19,13 +19,12 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         for match in cherrypick_re.findall(commit.message):
             cherrypicked_commits.add(match[1])
 
-    user_name = None
-    user_email = None
-    try:
-        user_name = repo.config.get_multivar('user.name').next()
-        user_email = repo.config.get_multivar('user.email').next()
-    except StopIteration:
-        pass
+    user_names = set(repo.config.get_multivar('user.name'))
+    user_emails = set(repo.config.get_multivar('user.email'))
+
+    if not user_names and not user_emails and not show_all:
+        print('No user.name or user.email in git config, can not show user-specific commits')
+        sys.exit(1)
 
     for commit in repo.walk(from_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
         # we walk from newest commits to oldest
@@ -33,8 +32,8 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
             break
 
         if str(commit.id) not in cherrypicked_commits and \
-                (show_all or commit.author.name == user_name or
-                 commit.author.email == user_email):
+                (show_all or commit.author.name in user_names or
+                 commit.author.email in user_emails):
             yield(commit)
 
         if since_commit and commit.id == since_commit.id:
