@@ -50,7 +50,7 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
 
 parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
 parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
-                    default='master', nargs='?')
+                    default='origin/master', nargs='?')
 parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
                     default='HEAD', nargs='?')
 parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
