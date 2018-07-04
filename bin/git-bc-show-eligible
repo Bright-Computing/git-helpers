@@ -1,10 +1,19 @@
 #!/usr/bin/env python
 
-import pygit2
-import re
+import subprocess
 import argparse
+import pygit2
 import sys
+import re
 
+def find_toplevel():
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', '--show-toplevel'],
+            stderr=subprocess.PIPE
+        ).rstrip()
+    except subprocess.CalledProcessError:
+        return None
 
 def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
     base_id = repo.merge_base(from_commit.id, to_commit.id)
@@ -40,14 +49,21 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
             break
 
 parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
-parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against')
+parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
+                    default='origin/master', nargs='?')
 parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
                     default='HEAD', nargs='?')
 parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
 parser.add_argument('--all', action='store_true', help='Show commits from all users')
 
+top = find_toplevel()
+
+if not top:
+    print('The current folder is not a valid git repository')
+    sys.exit(1)
+
 args = parser.parse_args()
-repo = pygit2.Repository('.')
+repo = pygit2.Repository(top)
 
 try:
     from_commit = repo.revparse_single(args.branch)
