@@ -120,6 +120,9 @@ for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all
             groups.append(current_group)
         current_group = [commit_string]
 
+if current_group:
+    groups.append(current_group)
+
 for group in groups:
     merge = group[0]
     child_commits = group[1:-1]
