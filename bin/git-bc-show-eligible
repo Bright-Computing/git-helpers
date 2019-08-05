@@ -51,88 +51,92 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         if since_commit and commit.id == since_commit.id:
             break
 
-parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
-parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
-                    default='origin/master', nargs='?')
-parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
-                    default='HEAD', nargs='?')
-parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
-parser.add_argument('--all', action='store_true', help='Show commits from all users')
+def main():
+    parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
+    parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
+                        default='origin/master', nargs='?')
+    parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
+                        default='HEAD', nargs='?')
+    parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
+    parser.add_argument('--all', action='store_true', help='Show commits from all users')
 
-top = find_toplevel()
+    top = find_toplevel()
 
-if not top:
-    print('The current folder is not a valid git repository')
-    sys.exit(1)
-
-args = parser.parse_args()
-repo = pygit2.Repository(top)
-
-try:
-    from_commit = repo.revparse_single(args.branch)
-except:
-    print('Invalid branch %s' % args.branch)
-    sys.exit(1)
-
-try:
-    to_commit = repo.revparse_single(args.target_branch)
-except:
-    print('Invalid target branch %s' % args.target_branch)
-    sys.exit(1)
-
-if not repo.merge_base(from_commit.id, to_commit.id):
-    print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
-    sys.exit(1)
-
-since_commit = None
-if args.since:
-    try:
-        since_commit = repo.revparse_single(args.since)
-    except:
-        print('Invalid since %s' % args.since)
+    if not top:
+        print('The current folder is not a valid git repository')
         sys.exit(1)
 
-author_format_str = ' | %s <%s>'
-commit_format_str = '%s %s%s'
+    args = parser.parse_args()
+    repo = pygit2.Repository(top)
 
-if sys.stdout.isatty():
-    author_format_str = ' \033[31m| %s <%s>\033[0m'
-    commit_format_str = '\033[33m%s\033[0m %s%s'
+    try:
+        from_commit = repo.revparse_single(args.branch)
+    except:
+        print('Invalid branch %s' % args.branch)
+        sys.exit(1)
 
-seen = ''
-groups = []
-current_group = []
-for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
-    author_info = ''
-    if args.all:
-        author_info = author_format_str % (commit.author.name, commit.author.email)
+    try:
+        to_commit = repo.revparse_single(args.target_branch)
+    except:
+        print('Invalid target branch %s' % args.target_branch)
+        sys.exit(1)
 
-    commit_msg = commit.message[:commit.message.index('\n')]
-    indent = commit_msg in seen
-    seen += commit.message
+    if not repo.merge_base(from_commit.id, to_commit.id):
+        print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
+        sys.exit(1)
 
-    commit_string = (commit_format_str % (str(commit.id), commit_msg, author_info))
+    since_commit = None
+    if args.since:
+        try:
+            since_commit = repo.revparse_single(args.since)
+        except:
+            print('Invalid since %s' % args.since)
+            sys.exit(1)
 
-    if indent:
-        current_group.append(commit_string)
-    else:
-        if current_group:
-            groups.append(current_group)
-        current_group = [commit_string]
+    author_format_str = ' | %s <%s>'
+    commit_format_str = '%s %s%s'
 
-if current_group:
-    groups.append(current_group)
+    if sys.stdout.isatty():
+        author_format_str = ' \033[31m| %s <%s>\033[0m'
+        commit_format_str = '\033[33m%s\033[0m %s%s'
 
-for group in groups:
-    merge = group[0]
-    child_commits = group[1:-1]
-    last_child_commit = group[-1] if len(group) > 1 else ''
+    seen = ''
+    groups = []
+    current_group = []
+    for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
+        author_info = ''
+        if args.all:
+            author_info = author_format_str % (commit.author.name, commit.author.email)
 
-    print(merge)
+        commit_msg = commit.message[:commit.message.index('\n')]
+        indent = commit_msg in seen
+        seen += commit.message
 
-    for child in child_commits:
-       print(" ├─ {}".format(child))
+        commit_string = (commit_format_str % (str(commit.id), commit_msg, author_info))
 
-    if last_child_commit:
-       print(" └─ {}".format(last_child_commit))
+        if indent:
+            current_group.append(commit_string)
+        else:
+            if current_group:
+                groups.append(current_group)
+            current_group = [commit_string]
 
+    if current_group:
+        groups.append(current_group)
+
+    for group in groups:
+        merge = group[0]
+        child_commits = group[1:-1]
+        last_child_commit = group[-1] if len(group) > 1 else ''
+
+        print(merge)
+
+        for child in child_commits:
+           print(" ├─ {}".format(child))
+
+        if last_child_commit:
+           print(" └─ {}".format(last_child_commit))
+
+
+if __name__ == '__main__':
+        main()
