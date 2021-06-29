@@ -8,6 +8,10 @@ import argparse
 import pygit2
 import sys
 import re
+import typing
+import os
+
+EXCLUDES_PATH = os.path.join(os.path.expanduser("~"), '.excludes_show_eligible')
 
 def find_toplevel():
     try:
@@ -51,6 +55,21 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         if since_commit and commit.id == since_commit.id:
             break
 
+def read_excludes() -> typing.List[str]:
+    if not os.path.isfile(EXCLUDES_PATH):
+        return []
+    with open(EXCLUDES_PATH, 'r') as f:
+        return f.read().splitlines()
+
+def add_exclude_hash(excludes: typing.List[str], commit: str) -> None:
+    if commit in excludes:
+        print(f'Commit {commit} already in the exclude list ({EXCLUDES_PATH}).')
+        sys.exit(1)
+    with open(EXCLUDES_PATH, 'at') as f:
+        f.write(commit + '\n')
+    print(f'Hash {commit} added successfully.')
+    exit(0)
+
 def main():
     parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
     parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
@@ -59,8 +78,11 @@ def main():
                         default='HEAD', nargs='?')
     parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
     parser.add_argument('--all', action='store_true', help='Show commits from all users')
+    parser.add_argument('--add-to-exclude-list', metavar='COMMIT', help='Add a merge commit hash so it, '
+                        f'and its children, no longer are displayed in the output. This is saved in "{EXCLUDES_PATH}".')
 
     top = find_toplevel()
+    excludes = read_excludes()
 
     if not top:
         print('The current folder is not a valid git repository')
@@ -68,6 +90,9 @@ def main():
 
     args = parser.parse_args()
     repo = pygit2.Repository(top)
+
+    if args.add_to_exclude_list:
+        add_exclude_hash(excludes, args.add_to_exclude_list)
 
     try:
         from_commit = repo.revparse_single(args.branch)
@@ -128,6 +153,9 @@ def main():
         merge = group[0]
         child_commits = group[1:-1]
         last_child_commit = group[-1] if len(group) > 1 else ''
+
+        if [e for e in excludes if e in merge]:
+            continue
 
         print(merge)
 
