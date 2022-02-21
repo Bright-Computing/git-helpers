@@ -11,7 +11,10 @@ import re
 import typing
 import os
 
-EXCLUDES_PATH = os.path.join(os.path.expanduser("~"), '.excludes_show_eligible')
+EXCLUDES_PATHS = [
+    os.path.join(os.path.expanduser("~"), '.excludes_show_eligible'),
+    os.path.join(os.path.expanduser("~"), '.excludes_show_eligible_manuals'),
+]
 
 def find_toplevel():
     try:
@@ -21,6 +24,7 @@ def find_toplevel():
         ).rstrip()
     except subprocess.CalledProcessError:
         return None
+
 
 def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
     base_id = repo.merge_base(from_commit.id, to_commit.id)
@@ -55,20 +59,26 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         if since_commit and commit.id == since_commit.id:
             break
 
+
 def read_excludes() -> typing.List[str]:
-    if not os.path.isfile(EXCLUDES_PATH):
-        return []
-    with open(EXCLUDES_PATH, 'r') as f:
-        return f.read().splitlines()
+    excludes = []
+    for file in EXCLUDES_PATHS:
+        if not os.path.isfile(file):
+            continue
+        with open(file, 'r') as f:
+            excludes.extend(f.read().splitlines())
+    return excludes
+
 
 def add_exclude_hash(excludes: typing.List[str], commit: str) -> None:
     if commit in excludes:
-        print(f'Commit {commit} already in the exclude list ({EXCLUDES_PATH}).')
+        print(f'Commit {commit} already in some exclude list ({EXCLUDES_PATHS}).')
         sys.exit(1)
-    with open(EXCLUDES_PATH, 'at') as f:
+    with open(EXCLUDES_PATHS[0], 'at') as f:
         f.write(commit + '\n')
-    print(f'Hash {commit} added successfully.')
+    print(f'Hash {commit} added successfully to {EXCLUDES_PATHS[0]}.')
     exit(0)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
@@ -79,7 +89,7 @@ def main():
     parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
     parser.add_argument('--all', action='store_true', help='Show commits from all users')
     parser.add_argument('--add-to-exclude-list', metavar='COMMIT', help='Add a merge commit hash so it, '
-                        f'and its children, no longer are displayed in the output. This is saved in "{EXCLUDES_PATH}".')
+                        f'and its children, no longer are displayed in the output. This is saved in "{EXCLUDES_PATHS[0]}".')
 
     top = find_toplevel()
     excludes = read_excludes()
@@ -167,4 +177,4 @@ def main():
 
 
 if __name__ == '__main__':
-        main()
+    main()
