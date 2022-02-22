@@ -72,7 +72,7 @@ def read_excludes() -> typing.List[str]:
 
 def add_exclude_hash(excludes: typing.List[str], commit: str) -> None:
     if commit in excludes:
-        print(f'Commit {commit} already in some exclude list ({EXCLUDES_PATHS}).')
+        print(f'Commit {commit} already in one of the exclude lists in {EXCLUDES_PATHS}.')
         sys.exit(1)
     with open(EXCLUDES_PATHS[0], 'at') as f:
         f.write(commit + '\n')
