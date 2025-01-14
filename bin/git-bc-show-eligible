@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 
 import subprocess
 import argparse
+import datetime
 import pygit2
 import sys
 import re
@@ -58,6 +59,8 @@ def main():
     parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
                         default='HEAD', nargs='?')
     parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
+    parser.add_argument('--show-dates', action='store_true', help='Show dates in %Y-%m-%d %H:%M:%S')
+
     parser.add_argument('--all', action='store_true', help='Show commits from all users')
 
     top = find_toplevel()
@@ -104,6 +107,14 @@ def main():
     groups = []
     current_group = []
     for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
+        formatted_date = ''
+        if args.show_dates:
+            timestamp = commit.commit_time  # commit timestamp
+            offset = commit.commit_time_offset  # timezone offset in minutes
+            commit_date = datetime.datetime.utcfromtimestamp(timestamp)
+            commit_date += datetime.timedelta(minutes=offset)
+            formatted_date = commit_date.strftime('%Y-%m-%d %H:%M:%S') + ' - '
+
         author_info = ''
         if args.all:
             author_info = author_format_str % (commit.author.name, commit.author.email)
@@ -112,7 +123,7 @@ def main():
         indent = commit_msg in seen
         seen += commit.message
 
-        commit_string = (commit_format_str % (str(commit.id), commit_msg, author_info))
+        commit_string = formatted_date + (commit_format_str % (str(commit.id), commit_msg, author_info))
 
         if indent:
             current_group.append(commit_string)
