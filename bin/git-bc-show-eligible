@@ -3,12 +3,12 @@
 
 from __future__ import unicode_literals
 
-import subprocess
 import argparse
 import datetime
 import pygit2
-import sys
 import re
+import subprocess
+import sys
 
 def find_toplevel():
     try:
@@ -62,6 +62,7 @@ def main():
     parser.add_argument('--show-dates', action='store_true', help='Show dates in %Y-%m-%d %H:%M:%S')
 
     parser.add_argument('--all', action='store_true', help='Show commits from all users')
+    parser.add_argument('--always-colors', action='store_true', help='Always force colored output')
 
     top = find_toplevel()
 
@@ -99,7 +100,7 @@ def main():
     author_format_str = ' | %s <%s>'
     commit_format_str = '%s %s%s'
 
-    if sys.stdout.isatty():
+    if sys.stdout.isatty() or args.always_colors:
         author_format_str = ' \033[31m| %s <%s>\033[0m'
         commit_format_str = '\033[33m%s\033[0m %s%s'
 
