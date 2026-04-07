@@ -70,6 +70,101 @@ def add_exclude_hash(excludes: typing.List[str], commit: str) -> None:
     print(f'Hash {commit} added successfully.')
     exit(0)
 
+def build_first_parent_set(repo, from_commit, base_id):
+    """Return set of commit IDs on the first-parent chain from from_commit to base_id."""
+    walker = repo.walk(from_commit.id, pygit2.GIT_SORT_TOPOLOGICAL)
+    walker.simplify_first_parent()
+    walker.hide(base_id)
+    return {str(c.id) for c in walker} | {str(base_id)}
+
+
+def get_merge_children(repo, commit, first_parent_set):
+    """Return (children_set, alt_mainline_hash) for a merge commit.
+
+    Scans all parents to find the mainline one (present in first_parent_set).
+    Children are collected from all non-mainline parents (handles octopus merges).
+    alt_mainline_hash is set to the mainline parent's full hash only when it is
+    not parents[0], so callers can flag the anomaly; otherwise it is None.
+    """
+    if len(commit.parents) < 2:
+        return set(), None
+
+    mainline_idx = None
+    for i, parent in enumerate(commit.parents):
+        if str(parent.id) in first_parent_set:
+            mainline_idx = i
+            break
+
+    assert mainline_idx is not None, \
+        f'No parent of merge commit {commit.id} is on the mainline'
+
+    mainline_parent = commit.parents[mainline_idx]
+    alt_mainline_hash = str(mainline_parent.id)[:12] if mainline_idx != 0 else None
+
+    children = set()
+    for i, branch_parent in enumerate(commit.parents):
+        if i == mainline_idx:
+            continue
+        merge_base_id = repo.merge_base(mainline_parent.id, branch_parent.id)
+        for c in repo.walk(branch_parent.id, pygit2.GIT_SORT_TOPOLOGICAL):
+            if c.id == merge_base_id:
+                break
+            children.add(str(c.id))
+
+    return children, alt_mainline_hash
+
+
+def group_by_merge(repo, commits, first_parent_set):
+    """Group commits so each merge commit heads a list with its branch children.
+
+    Returns list of (commits, alt_mainline_hash) tuples.
+    alt_mainline_hash is non-None when the mainline parent was not parents[0].
+    """
+    # In topological order, merge commits always appear before their branch children,
+    # so child_to_merge can be populated lazily in a single pass.
+    child_to_merge = {}
+    groups = []
+    current_group = []
+    current_merge_id = None
+    current_alt_mainline = None
+    for commit in commits:
+        commit_id = str(commit.id)
+        if len(commit.parents) >= 2:
+            children, alt_mainline = get_merge_children(repo, commit, first_parent_set)
+            child_to_merge.update({c: commit_id for c in children})
+        else:
+            alt_mainline = None
+        if child_to_merge.get(commit_id) == current_merge_id and current_merge_id is not None:
+            current_group.append(commit)
+        else:
+            if current_group:
+                groups.append((current_group, current_alt_mainline))
+            current_group = [commit]
+            current_merge_id = commit_id if len(commit.parents) >= 2 else None
+            current_alt_mainline = alt_mainline
+    if current_group:
+        groups.append((current_group, current_alt_mainline))
+    return groups
+
+
+def print_groups(groups, excludes, format_commit):
+    for group, alt_mainline in groups:
+        merge_str = format_commit(group[0])
+        children = group[1:]
+
+        if any(e in merge_str for e in excludes):
+            continue
+
+        if alt_mainline:
+            print(f'--select={alt_mainline} {merge_str}')
+        else:
+            print(merge_str)
+
+        for i, child in enumerate(children):
+            prefix = " └─ " if i == len(children) - 1 else " ├─ "
+            print(f"{prefix}{format_commit(child)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
     parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
@@ -106,7 +201,8 @@ def main():
         print('Invalid target branch %s' % args.target_branch)
         sys.exit(1)
 
-    if not repo.merge_base(from_commit.id, to_commit.id):
+    base_id = repo.merge_base(from_commit.id, to_commit.id)
+    if not base_id:
         print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
         sys.exit(1)
 
@@ -125,45 +221,16 @@ def main():
         author_format_str = ' \033[31m| %s <%s>\033[0m'
         commit_format_str = '\033[33m%s\033[0m %s%s'
 
-    seen = ''
-    groups = []
-    current_group = []
-    for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
+    def format_commit(commit):
         author_info = ''
         if args.all:
             author_info = author_format_str % (commit.author.name, commit.author.email)
-
         commit_msg = commit.message[:commit.message.index('\n')]
-        indent = commit_msg in seen
-        seen += commit.message
+        return commit_format_str % (str(commit.id), commit_msg, author_info)
 
-        commit_string = (commit_format_str % (str(commit.id), commit_msg, author_info))
-
-        if indent:
-            current_group.append(commit_string)
-        else:
-            if current_group:
-                groups.append(current_group)
-            current_group = [commit_string]
-
-    if current_group:
-        groups.append(current_group)
-
-    for group in groups:
-        merge = group[0]
-        child_commits = group[1:-1]
-        last_child_commit = group[-1] if len(group) > 1 else ''
-
-        if [e for e in excludes if e in merge]:
-            continue
-
-        print(merge)
-
-        for child in child_commits:
-           print(" ├─ {}".format(child))
-
-        if last_child_commit:
-           print(" └─ {}".format(last_child_commit))
+    first_parent_set = build_first_parent_set(repo, from_commit, base_id)
+    groups = group_by_merge(repo, find_unpicked(repo, from_commit, to_commit, since_commit, args.all), first_parent_set)
+    print_groups(groups, excludes, format_commit)
 
 
 if __name__ == '__main__':
