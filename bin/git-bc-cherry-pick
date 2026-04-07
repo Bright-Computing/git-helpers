@@ -27,7 +27,7 @@ Usage:
 
 Options:
     -n, --no-commit         Stage changes but do not commit
-    -s, --select COMMIT     The parent commit to select
+    -s, --select COMMIT     Treat COMMIT as the mainline parent
     --dry-run               Review commands to be executed
 "
 SCRIPT=`readlink -f $0`
@@ -37,7 +37,7 @@ CHERRY_PICK_OPTIONS="-x"
 . $DIR/bc-env.sh
 
 DRY_RUN=0
-COMMIT=1
+SHOULD_COMMIT=1
 
 while [ $# -gt 0 ]; do
     ARG=$1
@@ -46,7 +46,7 @@ while [ $# -gt 0 ]; do
         HELP=1
         ;;
     --no-commit|-n)
-        COMMIT=0
+        SHOULD_COMMIT=0
         ;;
     --select|-s)
         shift
@@ -71,40 +71,32 @@ if [ "$HELP" -eq 1 ] || [ -z "$COMMIT_ID" ]; then
     usage
 fi
 
-if [ "$DRY_RUN" -eq 1 ]; then
-    exec_cmd()
-    {
+exec_cmd() {
+    if [ "$DRY_RUN" -eq 1 ]; then
         echo "$@"
-    }
-else
-    exec_cmd()
-    {
+    else
         "$@"
-    }
-fi
-if [ "$COMMIT" -eq 0 ]; then
-    CHERRY_PICK_OPTIONS="$CHERRY_PICK_OPTIONS --no-commit"
-fi
-
-
-PARENTS=`git show --summary --format="%P" $COMMIT_ID | head -1`
-PARENTS_ARRAY=(`echo $PARENTS | tr ";" "\n"`)
-PARENTS_COUNT=`echo $PARENTS | wc -w`
-
-if [ "$PARENTS_COUNT" -gt 2 ]; then
-    echo "Number of parents greater than 2 is unsupported"
-    echo "    parents: $PARENTS"
-    exit 1
-fi
-
-if [ "$PARENTS_COUNT" -eq 1 ]; then
-    echo "This is a regular commit => regular cherry-pick"
-    if [ ! -z "$SELECTED" ]; then
-        echo "Note: ignored selected commit because the cherry-pick was not ambiguous"
     fi
-    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS $COMMIT_ID
-    exit 0
-fi
+}
+
+resolve_parents() {
+    # By git convention parents[0] is the mainline; --select overrides.
+    MAINLINE=1
+    BRANCH_PARENT=${PARENTS_ARRAY[1]}
+    [ -z "$SELECTED" ] && return
+    echo "Using $SELECTED as mainline"
+    for i in "${!PARENTS_ARRAY[@]}"; do
+        [[ "${PARENTS_ARRAY[$i]}" = $SELECTED* ]] || continue
+        MAINLINE=$((i+1))
+        for j in "${!PARENTS_ARRAY[@]}"; do
+            [[ "${PARENTS_ARRAY[$j]}" = $SELECTED* ]] && continue
+            BRANCH_PARENT=${PARENTS_ARRAY[$j]}
+            break
+        done
+        return
+    done
+    die "Error: $SELECTED is not among $COMMIT_ID parents, cannot select it"
+}
 
 cherrypick_merge() {
     set +e
@@ -112,16 +104,10 @@ cherrypick_merge() {
     RET=$?
     set -e
 
-    if [ "$MAINLINE" -eq 1 ]; then
-        INDEX=1
-    else
-        INDEX=0
-    fi
-
-    CHILDREN_LIST=`git --no-pager log --oneline "$COMMON_ANCESTOR..${PARENTS_ARRAY[$INDEX]}" --no-abbrev-commit | sed 's/\([^ ]*\) .*/(with child \1)/'`
-    if [ "$RET" -ne 0 ] || [ "$COMMIT" -eq 0 ]; then
+    CHILDREN_LIST=`git --no-pager log --oneline "$COMMON_ANCESTOR..$BRANCH_PARENT" --no-abbrev-commit | sed 's/\([^ ]*\) .*/(with child \1)/'`
+    if [ "$RET" -ne 0 ] || [ "$SHOULD_COMMIT" -eq 0 ]; then
         if [ "$DRY_RUN" -eq 0 ]; then
-            echo "$CHILDREN_LIST" >> .git/MERGE_MSG
+            echo "$CHILDREN_LIST" >> "$(git rev-parse --git-dir)/MERGE_MSG"
         fi
         exit $RET
     fi
@@ -132,103 +118,31 @@ cherrypick_merge() {
     exec_cmd git commit --amend -m "${MESSAGE}"
 }
 
-echo "This is a merge commit"
-COMMON_ANCESTOR=`git merge-base $PARENTS`
+if [ "$SHOULD_COMMIT" -eq 0 ]; then
+    CHERRY_PICK_OPTIONS="$CHERRY_PICK_OPTIONS --no-commit"
+fi
 
-COUNTER=1
-for PARENT in ${PARENTS_ARRAY[@]}; do
-    if [ "$PARENT" = "$COMMON_ANCESTOR" ]; then
-        MAINLINE=$COUNTER
-        break;
-    fi
-    COUNTER=$(($COUNTER+1))
-done
-if [ ! -z "$MAINLINE" ]; then
-    echo "This is an empty merge commit => the branch to apply is implicit"
+PARENTS=`git show --summary --format="%P" $COMMIT_ID | head -1`
+PARENTS_ARRAY=(`echo $PARENTS | tr ";" "\n"`)
+PARENTS_COUNT=`echo $PARENTS | wc -w`
+
+if [ "$PARENTS_COUNT" -eq 1 ]; then
+    echo "This is a regular commit => regular cherry-pick"
     if [ ! -z "$SELECTED" ]; then
         echo "Note: ignored selected commit because the cherry-pick was not ambiguous"
     fi
-    cherrypick_merge
+    exec_cmd git cherry-pick $CHERRY_PICK_OPTIONS $COMMIT_ID
     exit 0
 fi
 
-if [ ! -z "$SELECTED" ]; then
-    echo "Try to cherry-pick using the parent $SELECTED"
-    COUNTER=1
-    for PARENT in ${PARENTS_ARRAY[@]}; do
-        if [[ "$PARENT" = $SELECTED* ]]; then
-            PARENT_INDEX=$COUNTER
-            break;
-        fi
-        COUNTER=$(($COUNTER+1))
-    done
-    if [ -z "$PARENT_INDEX" ]; then
-        die "Error: $SELECTED is not among $COMMIT_ID parents, cannot select it"
-    fi
-    if [ "$PARENT_INDEX" -eq 1 ]; then
-        MAINLINE=2
-    else
-        MAINLINE=1
-    fi
+echo "This is a merge commit"
+COMMON_ANCESTOR=`git merge-base $PARENTS`
+resolve_parents
 
-    cherrypick_merge
-    exit 0
-fi
-
-PROMPT="\
-Select one option to review the state or the branch to apply:
-    graph)      review the commit graph
-    commits)    review the list of commits
-    diff)       review the diff
-    1|2)        select the branch to be applied (1 or 2)
-    help)       show this message
-    quit)       abort
-"
-echo "$PROMPT"
-while true; do
-    read -p "Selection (<NUM>/g/c/d/h/q) " SEL
-    case "$SEL" in
-        [gG]|graph|GRAPH)
-            git bc-log "$COMMON_ANCESTOR^..$COMMIT_ID"
-            ;;
-        [cC]|commits|COMMITS)
-            COUNTER=1
-            for PARENT in ${PARENTS_ARRAY[@]}; do
-                echo "Branch $COUNTER:"
-                git --no-pager log --oneline "$COMMON_ANCESTOR..$PARENT"
-                echo ""
-                COUNTER=$(($COUNTER+1))
-            done
-            ;;
-        [dD]|diff|DIFF)
-            COUNTER=1
-            for PARENT in ${PARENTS_ARRAY[@]}; do
-                echo "Branch $COUNTER:"
-                git --no-pager diff "$COMMON_ANCESTOR..$PARENT"
-                echo ""
-                COUNTER=$(($COUNTER+1))
-            done
-            ;;
-        1)
-            MAINLINE=2
-            break;
-            ;;
-        2)
-            MAINLINE=1
-            break;
-            ;;
-        [hH]|help|HELP)
-            echo "$PROMPT"
-            ;;
-        [qQ]|quit|QUIT)
-            echo "Aborting"
-            exit 1
-            ;;
-        *)
-            echo "Invalid selection"
-            ;;
-    esac
-done
-
-echo "Apply commits with mainline $MAINLINE"
+HEAD_BEFORE=`git rev-parse HEAD`
+echo "Mainline: ${PARENTS_ARRAY[$((MAINLINE-1))]}, branch: $BRANCH_PARENT"
+echo "If the result looks wrong:"
+echo "  - conflicts pending:   git cherry-pick --abort"
+echo "  - applied cleanly:     git reset --soft $HEAD_BEFORE"
+echo "Then retry with:         git bc-cherry-pick --select $BRANCH_PARENT $COMMIT_ID"
 cherrypick_merge
