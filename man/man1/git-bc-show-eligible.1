@@ -1,0 +1,94 @@
+.\" generated with Ronn-NG/v0.9.1
+.\" http://github.com/apjanke/ronn-ng/tree/0.9.1
+.TH "GIT\-BC\-SHOW\-ELIGIBLE" "1" "April 2026" ""
+.SH "NAME"
+\fBgit\-bc\-show\-eligible\fR \- Show commits eligible for cherry\-picking
+.SH "SYNOPSIS"
+\fBgit bc\-show\-eligible\fR [\fIoptions\fR] [\fIbranch\fR] [\fItarget\-branch\fR]
+.SH "DESCRIPTION"
+Lists commits on \fIbranch\fR that have not yet been cherry\-picked onto \fItarget\-branch\fR, so they are candidates for backporting with git\-bc\-cherry\-pick(1)\.
+.P
+A commit is considered already picked if \fItarget\-branch\fR contains a commit whose message includes \fBcherry picked from commit <hash>\fR (added by \fBgit cherry\-pick \-x\fR) or \fBwith child <hash>\fR (added by git\-bc\-cherry\-pick(1) when picking a merge commit)\.
+.P
+By default only commits authored by the current git user are shown\. Use \fB\-\-all\fR to include commits from all authors\.
+.P
+Merge commits are shown together with their branch\-side children, indented below the merge line with tree connectors:
+.IP "" 4
+.nf
+<hash> Merge commit message
+ ├─ <hash> Branch child 1
+ └─ <hash> Branch child 2
+.fi
+.IP "" 0
+.P
+When the mainline parent of a merge commit is not \fBparents[0]\fR \(em which happens when the merge was performed from the feature branch side rather than from master \(em the line is prefixed with \fB\-\-select=<hash>\fR to indicate the correct mainline for git\-bc\-cherry\-pick(1):
+.IP "" 4
+.nf
+\-\-select=<mainline\-hash> <hash> Merge commit message
+ └─ <hash> Branch child
+.fi
+.IP "" 0
+.P
+This prefix is designed for copy\-paste directly into the git\-bc\-cherry\-pick(1) invocation\.
+.SH "OPTIONS"
+.TP
+\fB<branch>\fR
+The branch to inspect for eligible commits\. Defaults to \fBorigin/master\fR\.
+.TP
+\fB<target\-branch>\fR
+The branch to cherry\-pick onto\. Defaults to \fBHEAD\fR\.
+.TP
+\fB\-\-since <commit>\fR
+Only show commits reachable from \fIcommit\fR\. Useful for limiting output to a specific range\.
+.TP
+\fB\-\-all\fR
+Show commits from all authors, not only the current user\.
+.TP
+\fB\-\-add\-to\-exclude\-list <commit>\fR
+Permanently suppress a merge commit (and its children) from the output\. The hash is appended to \fB~/\.excludes_show_eligible\fR\. Useful for merge commits that should never be backported\.
+.SH "EXAMPLES"
+Suppose the following history:
+.IP "" 4
+.nf
+master:  A \-\-\- X \-\-\- M \-\-\- P
+                    /
+feature:       F1\-\-F2
+
+stable:  A \-\-\- S
+.fi
+.IP "" 0
+.P
+Show commits on master not yet on stable:
+.IP "" 4
+.nf
+$ git bc\-show\-eligible master stable
+<hash> M
+ ├─ <hash> F2
+ └─ <hash> F1
+<hash> P
+<hash> X
+.fi
+.IP "" 0
+.P
+After cherry\-picking M onto stable with git\-bc\-cherry\-pick(1), its hash and those of F1 and F2 are recorded in the stable commit message\. Running the command again will no longer show M, F1, or F2\.
+.P
+When the mainline parent is not \fBparents[0]\fR, the output marks the line for the operator:
+.IP "" 4
+.nf
+\-\-select=<hash of X> <hash> M
+ └─ <hash> F1
+.fi
+.IP "" 0
+.P
+Pass the entire prefixed line as arguments to git\-bc\-cherry\-pick(1):
+.IP "" 4
+.nf
+$ git bc\-cherry\-pick \-\-select=<hash of X> <hash of M>
+.fi
+.IP "" 0
+.SH "FILES"
+.TP
+\fB~/\.excludes_show_eligible\fR
+Per\-user list of merge commit hashes to suppress from output\. One hash per line\. Managed with \fB\-\-add\-to\-exclude\-list\fR\.
+.SH "SEE ALSO"
+git\-bc\-cherry\-pick(1), git\-cherry\-pick(1)

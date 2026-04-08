@@ -11,45 +11,35 @@ Given an existing commit, apply the changes it introduced, recording a new
 commit in the current branch. This requires your working tree to be clean (no
 modifications from the HEAD commit).
 
-The command applies a standard git-cherry-pick(1) with the given commit. It
-works the same way, except that in case the given commit is a merge, it asks
-interactively what is the branch to consider in the cherry pick. By default it
-does not commit, but only stages the changes, so it allows you to review them.
+For a regular commit, the command behaves exactly like git-cherry-pick(1).
 
-In case the command can't figure out what branch to apply automatically, this
-is the prompt it presents to you:
+For a merge commit, the mainline parent is determined automatically: by git
+convention the first parent (`parents[0]`) is always the branch the merge was
+performed onto, so the changes introduced by the other side are applied. The
+resulting commit message is amended with one `(with child <hash>)` line per
+commit on the branch side, so that git-bc-show-eligible(1) can later detect
+that those commits have already been backported.
 
-```
-This is a merge commit
-Select one option to review the state or the branch to apply:
-    graph)      review the commit graph
-    commits)    review the list of commits
-    diff)       review the diff
-    1|2)        select the branch to be applied (1 or 2)
-    help)       show this message
-    quit)       abort
+If the heuristic picks the wrong mainline — for example when the merge commit
+was created from the feature branch side rather than from master — the command
+prints a suggested retry command with `--select` pointing at the correct
+mainline. git-bc-show-eligible(1) also detects this situation and prefixes the
+line with `--select=<hash>` ready for copy-paste.
 
-Selection (<NUM>/g/c/d/h/q)
-```
-
-Options `graph`, `commits` and `diff` gives an overview of the branches to be
-considered, `1` selects the first branch and `2` the second one. Option `q` is
-to abort the cherry-pick.
-
-If conflicts arise, you will need to resolve them by editing the files and
-adding them with git-add(1) and continue the cherry-pick with git-cherry-pick(1)
-with the `--continue` option. You can use git-status(1) to be guided through
-this process.
+If conflicts arise, resolve them by editing the affected files, staging them
+with git-add(1), and continuing with `git cherry-pick --continue`. Use
+git-status(1) to be guided through the process.
 
 ## OPTIONS
 
   * `-n`, `--no-commit`:
-    Stage changes if the cherry-pick succedes, but do not commit.
+    Stage changes but do not commit. The children list is appended to
+    `MERGE_MSG` so it is available for a manual `git commit`.
 
   * `-s <commit>`, `--select <commit>`:
-    Select this commit as the parent to apply in the cherry-pick. This option
-    is meaningful only when the commit to cherry-pick is a merge and the branch
-    to apply is ambiguous.
+    Treat <commit> as the mainline parent instead of `parents[0]`. Accepts a
+    full hash or any unambiguous prefix. Use this when the auto-detected
+    mainline is wrong.
 
   * `--dry-run`:
     Do not actually execute the git commands, but only print them.
@@ -60,82 +50,51 @@ this process.
 
 ## EXAMPLES
 
-Suppose to have this history:
+Suppose the following history:
 
-```
-     .---B---C---D---
-    /   /       /
----A   /       /
-    \ /       /
-     E-------F
+    master:  A --- X --- M --- P
+                        /
+    feature:       F1--F2
 
----G---H
-```
+    stable:  A --- S
 
-The commits are:
+Commits M and P are on master. F1, F2 are on a feature branch. S is on the
+stable branch you are backporting onto.
 
-  * A is the common ancestor between two branches.
-  * Commits B, C, D are part of the master branch.
-  * Commits E, F are part of a feature branch.
-  * Commits B and D are merge commits between the two branches. They are however
-    different, because D is a normal merge bringing together commits B, C and F,
-    while B has been created with `--ff-only option`, so even if master hasn't
-    changed in the meantime, instead of fast forwarding master to E, a new merge
-    commit has been created.
-  * Commits G, H are commits of a release branch (H is its last commit).
+Cherry-pick the regular commit P:
 
-You want to cherry pick onto the release branch one of the commits in the
-other two branches. The other two branches are not affected. The end result for
-the release branch will be this in all the examples:
+    $ git bc-cherry-pick P
 
-```
----G---H---I
-```
+The command performs a plain cherry-pick, equivalent to `git cherry-pick -x P`.
 
-If you want to cherry-pick the commit F:
+Cherry-pick the merge commit M:
 
-    $ git bc-cherry-pick F
+    $ git bc-cherry-pick M
 
-    The command will simply cherry pick the commit and create I, without user
-    interaction.
+The command detects that M is a merge, identifies X as the mainline
+(`parents[0]`), and cherry-picks the feature side (F1, F2). The resulting
+commit on stable has the original merge message amended with:
 
-If you want to cherry-pick the commit B:
+    (with child <hash of F2>)
+    (with child <hash of F1>)
 
-    $ git bc-cherry-pick B
+If the result looks wrong because the wrong mainline was picked, the command
+prints:
 
-    The command will simply cherry pick the commit and create I, without user
-    interaction. This is possible because she branch to select is unambiguosly
-    the one containing E, since the other one is empty (i.e. there are no
-    commits between A (common ancestor) and B.
+    If the result looks wrong:
+      - conflicts pending:   git cherry-pick --abort
+      - applied cleanly:     git reset --soft <HEAD before>
+    Then retry with:         git bc-cherry-pick --select <branch-parent> <commit>
 
-If you want to cherry-pick the commit D, with the commits introduced in the
-feature branch:
+Cherry-pick a merge commit where the mainline is not `parents[0]`:
 
-    $ git bc-cherry-pick D
+    $ git bc-cherry-pick --select X M
 
-    The command will stop and ask for user interaction, because it doesn't know
-    which branch to apply. The choice is between commits E, F, or B, C. In this
-    case we want E, F. To help us on selecting the branch we can review their
-    contents by selecting `c` in the prompt. The outupt will be this:
-
-    Branch 1:
-    C message 2
-    B message 1
-
-    Branch 2:
-    E message 3
-    F message 4
-
-    In this case we need to input `2` to select the second branch.
-
-If you don't want to use the interactive mode and you already know which parent
-to apply, you can specify it with the `--select` option:
-
-    $ git bc-cherry-pick -s E D
-
-    The command will cherry-pick the the second branch, because E is the first
-    commit of that branch.
+This is needed when the merge commit was created from the feature branch side
+(so `parents[0]` points into the feature, not into master). git-bc-show-eligible(1)
+detects this automatically and displays the line prefixed with `--select=<hash>`
+ready for copy-paste.
 
 ## SEE ALSO
 
-git-cherry-pick(1)
+git-cherry-pick(1), git-bc-show-eligible(1)
