@@ -40,7 +40,8 @@ invocation.
 ## OPTIONS
 
   * `<branch>`:
-    The branch to inspect for eligible commits. Defaults to `origin/master`.
+    The branch to inspect for eligible commits. If omitted, auto-detected from
+    the remote's default branch. If detection fails, a hint is printed.
 
   * `<target-branch>`:
     The branch to cherry-pick onto. Defaults to `HEAD`.
