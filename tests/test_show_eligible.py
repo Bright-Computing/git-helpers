@@ -1,4 +1,4 @@
-from conftest import bc_show_eligible, git_cherry_pick, git_cherry_pick_merge, resolve_ref
+from conftest import bc_show_eligible, git_cherry_pick, git_cherry_pick_merge, resolve_ref, set_origin_head
 
 
 def test_merge_groups_by_parentage(make_repo):
@@ -79,6 +79,24 @@ def test_standalone_commit_visible(make_repo):
     top_level = [l for l in result.stdout.splitlines() if not l.startswith(' ')]
     assert any('XXX-30: Fix nasty bug' in l for l in top_level), \
         "'XXX-30: Fix nasty bug' not found as a top-level entry"
+
+
+def test_autodetect_uses_origin_head(make_repo):
+    """When no BRANCH is given and origin/HEAD is set, it is auto-detected and used."""
+    repo = make_repo('merge_differing_messages')
+    set_origin_head(repo, 'master')
+    result = bc_show_eligible(repo)
+    assert result.returncode == 0, f"expected exit 0, got {result.returncode}"
+    assert 'Auto-detected main branch: origin/master' in result.stdout
+
+
+def test_autodetect_fails_without_origin_head(make_repo):
+    """When no BRANCH is given and origin/HEAD is absent, exit 1 with an actionable error."""
+    repo = make_repo('merge_differing_messages')
+    result = bc_show_eligible(repo)
+    assert result.returncode == 1
+    assert 'No branch provided and could not auto-detect one' in result.stdout
+    assert 'git remote set-head origin --auto' in result.stdout
 
 
 def test_octopus_merge_children_grouped(make_repo):

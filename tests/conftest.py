@@ -80,6 +80,13 @@ def bc_cherry_pick(repo_dir, commit_ref, *args):
     return result
 
 
+def set_origin_head(repo_dir, branch='master'):
+    """Create refs/remotes/origin/{branch} and set refs/remotes/origin/HEAD to point to it."""
+    commit = resolve_ref(repo_dir, branch)
+    git(repo_dir, 'update-ref', f'refs/remotes/origin/{branch}', commit)
+    git(repo_dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', f'refs/remotes/origin/{branch}')
+
+
 def bc_show_eligible(repo_dir, *args):
     result = subprocess.run(
         [BIN_DIR / 'git-bc-show-eligible', *args],
