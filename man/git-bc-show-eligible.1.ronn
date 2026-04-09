@@ -1,0 +1,101 @@
+git-bc-show-eligible(1) -- Show commits eligible for cherry-picking
+====================================================================
+
+## SYNOPSIS
+
+`git bc-show-eligible` [<options>] [<branch>] [<target-branch>]
+
+## DESCRIPTION
+
+Lists commits on <branch> that have not yet been cherry-picked onto
+<target-branch>, so they are candidates for backporting with
+git-bc-cherry-pick(1).
+
+A commit is considered already picked if <target-branch> contains a commit
+whose message includes `cherry picked from commit <hash>` (added by
+`git cherry-pick -x`) or `with child <hash>` (added by git-bc-cherry-pick(1)
+when picking a merge commit).
+
+By default only commits authored by the current git user are shown. Use
+`--all` to include commits from all authors.
+
+Merge commits are shown together with their branch-side children, indented
+below the merge line with tree connectors:
+
+    <hash> Merge commit message
+     ├─ <hash> Branch child 1
+     └─ <hash> Branch child 2
+
+When the mainline parent of a merge commit is not `parents[0]` — which
+happens when the merge was performed from the feature branch side rather than
+from master — the line is prefixed with `--select=<hash>` to indicate the
+correct mainline for git-bc-cherry-pick(1):
+
+    --select=<mainline-hash> <hash> Merge commit message
+     └─ <hash> Branch child
+
+This prefix is designed for copy-paste directly into the git-bc-cherry-pick(1)
+invocation.
+
+## OPTIONS
+
+  * `<branch>`:
+    The branch to inspect for eligible commits. Defaults to `origin/master`.
+
+  * `<target-branch>`:
+    The branch to cherry-pick onto. Defaults to `HEAD`.
+
+  * `--since <commit>`:
+    Only show commits reachable from <commit>. Useful for limiting output to
+    a specific range.
+
+  * `--all`:
+    Show commits from all authors, not only the current user.
+
+  * `--add-to-exclude-list <commit>`:
+    Permanently suppress a merge commit (and its children) from the output.
+    The hash is appended to `~/.excludes_show_eligible`. Useful for merge
+    commits that should never be backported.
+
+## EXAMPLES
+
+Suppose the following history:
+
+    master:  A --- X --- M --- P
+                        /
+    feature:       F1--F2
+
+    stable:  A --- S
+
+Show commits on master not yet on stable:
+
+    $ git bc-show-eligible master stable
+    <hash> M
+     ├─ <hash> F2
+     └─ <hash> F1
+    <hash> P
+    <hash> X
+
+After cherry-picking M onto stable with git-bc-cherry-pick(1), its hash
+and those of F1 and F2 are recorded in the stable commit message. Running
+the command again will no longer show M, F1, or F2.
+
+When the mainline parent is not `parents[0]`, the output marks the line for
+the operator:
+
+    --select=<hash of X> <hash> M
+     └─ <hash> F1
+
+Pass the entire prefixed line as arguments to git-bc-cherry-pick(1):
+
+    $ git bc-cherry-pick --select=<hash of X> <hash of M>
+
+## FILES
+
+  * `~/.excludes_show_eligible`:
+    Per-user list of merge commit hashes to suppress from output. One hash
+    per line. Managed with `--add-to-exclude-list`.
+
+## SEE ALSO
+
+git-bc-cherry-pick(1), git-cherry-pick(1)
