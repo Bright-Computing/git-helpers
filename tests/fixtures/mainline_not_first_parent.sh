@@ -17,8 +17,10 @@
 
 set -e
 
-REPO=$(mktemp -d)
-trap "rm -rf $REPO" EXIT
+WORK_DIR="${1:?Usage: $0 <work-dir>}"
+FIXTURES_OUT="$WORK_DIR/fixtures"
+
+REPO=$(mktemp -d "$WORK_DIR/repo.XXXXXX")
 
 git -C $REPO init -q
 git -C $REPO config user.email test@test
@@ -50,5 +52,5 @@ git -C $REPO commit --allow-empty -m "XXX-2: Feature part 2" -q
 git -C $REPO checkout master -q
 git -C $REPO merge --no-ff feature -m "XXX-2: Feature done" -q
 
-git -C $REPO fast-export --all > "$(dirname "$0")/mainline_not_first_parent.fi"
+git -C $REPO fast-export --all > "$FIXTURES_OUT/mainline_not_first_parent.fi"
 echo "Written mainline_not_first_parent.fi"

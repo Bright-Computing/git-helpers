@@ -16,8 +16,10 @@
 
 set -e
 
-REPO=$(mktemp -d)
-trap "rm -rf $REPO" EXIT
+WORK_DIR="${1:?Usage: $0 <work-dir>}"
+FIXTURES_OUT="$WORK_DIR/fixtures"
+
+REPO=$(mktemp -d "$WORK_DIR/repo.XXXXXX")
 
 git -C $REPO init -q
 git -C $REPO config user.email test@test
@@ -58,5 +60,5 @@ echo "patch" > $REPO/patch.txt
 git -C $REPO add patch.txt
 git -C $REPO commit -m "XXX-3: Patch" -q
 
-git -C $REPO fast-export --all > "$(dirname "$0")/bc_cherry_pick_scenarios.fi"
+git -C $REPO fast-export --all > "$FIXTURES_OUT/bc_cherry_pick_scenarios.fi"
 echo "Written bc_cherry_pick_scenarios.fi"
