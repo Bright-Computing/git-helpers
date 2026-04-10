@@ -13,12 +13,30 @@ import os
 
 EXCLUDES_PATH = os.path.join(os.path.expanduser("~"), '.excludes_show_eligible')
 
+def detect_main_branch(top):
+    """Detect the remote main branch via origin/HEAD symbolic ref.
+
+    Returns the branch name (e.g. 'origin/main') or None if it cannot be determined.
+    Users can populate the ref with: git remote set-head origin --auto
+    """
+    try:
+        ref = subprocess.check_output(
+            ['git', 'symbolic-ref', 'refs/remotes/origin/HEAD'],
+            cwd=top,
+            stderr=subprocess.PIPE,
+        ).decode('utf-8').strip()
+        # ref is e.g. 'refs/remotes/origin/main' → strip the prefix
+        return ref.removeprefix('refs/remotes/')
+    except subprocess.CalledProcessError:
+        return None
+
+
 def find_toplevel():
     try:
         return subprocess.check_output(
             ['git', 'rev-parse', '--show-toplevel'],
             stderr=subprocess.PIPE
-        ).rstrip()
+        ).decode('utf-8').strip()
     except subprocess.CalledProcessError:
         return None
 
@@ -168,7 +186,7 @@ def print_groups(groups, excludes, format_commit):
 def main():
     parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
     parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
-                        default='origin/master', nargs='?')
+                        default=None, nargs='?')
     parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
                         default='HEAD', nargs='?')
     parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
@@ -186,24 +204,33 @@ def main():
     args = parser.parse_args()
     repo = pygit2.Repository(top)
 
+    if args.branch is None:
+        branch = detect_main_branch(top)
+        if not branch:
+            print('No branch provided and could not auto-detect one. Run: git remote set-head origin --auto')
+            sys.exit(1)
+        print(f'Auto-detected main branch: {branch}')
+    else:
+        branch = args.branch
+
     if args.add_to_exclude_list:
         add_exclude_hash(excludes, args.add_to_exclude_list)
 
     try:
-        from_commit = repo.revparse_single(args.branch)
+        from_commit = repo.revparse_single(branch)
     except:
-        print('Invalid branch %s' % args.branch)
+        print(f'Invalid branch {branch}')
         sys.exit(1)
 
     try:
         to_commit = repo.revparse_single(args.target_branch)
     except:
-        print('Invalid target branch %s' % args.target_branch)
+        print(f'Invalid target branch {args.target_branch}')
         sys.exit(1)
 
     base_id = repo.merge_base(from_commit.id, to_commit.id)
     if not base_id:
-        print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
+        print(f'{branch} and {args.target_branch} does not have common ancestor')
         sys.exit(1)
 
     since_commit = None

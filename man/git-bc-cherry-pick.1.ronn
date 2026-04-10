@@ -11,7 +11,8 @@ Given an existing commit, apply the changes it introduced, recording a new
 commit in the current branch. This requires your working tree to be clean (no
 modifications from the HEAD commit).
 
-For a regular commit, the command behaves exactly like git-cherry-pick(1).
+For a regular commit, the command behaves like `git cherry-pick -x`, appending
+a `cherry picked from commit <hash>` line to the commit message.
 
 For a merge commit, the mainline parent is determined automatically: by git
 convention the first parent (`parents[0]`) is always the branch the merge was
@@ -65,7 +66,7 @@ Cherry-pick the regular commit P:
 
     $ git bc-cherry-pick P
 
-The command performs a plain cherry-pick, equivalent to `git cherry-pick -x P`.
+The command performs a plain cherry-pick equivalent to `git cherry-pick -x P`.
 
 Cherry-pick the merge commit M:
 

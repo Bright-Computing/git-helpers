@@ -8,7 +8,7 @@
 .SH "DESCRIPTION"
 Given an existing commit, apply the changes it introduced, recording a new commit in the current branch\. This requires your working tree to be clean (no modifications from the HEAD commit)\.
 .P
-For a regular commit, the command behaves exactly like git\-cherry\-pick(1)\.
+For a regular commit, the command behaves like \fBgit cherry\-pick \-x\fR, appending a \fBcherry picked from commit <hash>\fR line to the commit message\.
 .P
 For a merge commit, the mainline parent is determined automatically: by git convention the first parent (\fBparents[0]\fR) is always the branch the merge was performed onto, so the changes introduced by the other side are applied\. The resulting commit message is amended with one \fB(with child <hash>)\fR line per commit on the branch side, so that git\-bc\-show\-eligible(1) can later detect that those commits have already been backported\.
 .P
@@ -49,7 +49,7 @@ $ git bc\-cherry\-pick P
 .fi
 .IP "" 0
 .P
-The command performs a plain cherry\-pick, equivalent to \fBgit cherry\-pick \-x P\fR\.
+The command performs a plain cherry\-pick equivalent to \fBgit cherry\-pick \-x P\fR\.
 .P
 Cherry\-pick the merge commit M:
 .IP "" 4
