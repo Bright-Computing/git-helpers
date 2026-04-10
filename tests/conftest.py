@@ -2,8 +2,24 @@ import subprocess
 import pytest
 from pathlib import Path
 
-FIXTURES_DIR = Path(__file__).parent / 'fixtures'
 BIN_DIR = Path(__file__).parent.parent / 'bin'
+
+
+def pytest_addoption(parser):
+    parser.addoption('--work-dir', default=None, help='Root temp directory for fixtures and test repos')
+
+
+@pytest.fixture(scope='session')
+def work_dir(request):
+    d = request.config.getoption('--work-dir')
+    if d is None:
+        pytest.exit(
+            'Missing --work-dir. Run the suite via tests/run_tests.sh, '
+            'which prepares fixtures and passes --work-dir automatically.',
+            returncode=1,
+        )
+    return Path(d)
+
 
 
 def cmd_info(result):
@@ -31,16 +47,25 @@ def resolve_ref(repo_dir, ref):
     return git(repo_dir, 'rev-parse', ref).stdout.strip()
 
 
+# Multiple tests may use the same fixture name; a counter ensures each gets
+# its own subdirectory under work_dir/tests/ without collisions.
+_repo_counter = 0
+
+
 @pytest.fixture
-def make_repo(tmp_path):
+def make_repo(work_dir):
     """Return a factory that creates a git repo from a .fi fixture file."""
+    global _repo_counter
+    _repo_counter += 1
+    idx = _repo_counter
+
     def _make(fixture_name):
-        repo_dir = tmp_path / fixture_name
-        repo_dir.mkdir()
+        repo_dir = work_dir / 'tests' / f'{idx}_{fixture_name}'
+        repo_dir.mkdir(parents=True)
         git(repo_dir, 'init')
         git(repo_dir, 'config', 'user.email', 'test@test')
         git(repo_dir, 'config', 'user.name', 'Test')
-        fi_path = FIXTURES_DIR / f'{fixture_name}.fi'
+        fi_path = work_dir / 'fixtures' / f'{fixture_name}.fi'
         with fi_path.open('rb') as f:
             subprocess.run(
                 ['git', 'fast-import', '--quiet'],
