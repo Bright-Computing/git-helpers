@@ -5,24 +5,26 @@ from __future__ import unicode_literals
 
 import argparse
 import datetime
-import pygit2
 import re
 import subprocess
 import sys
 
+import pygit2
+
+
 def find_toplevel():
     try:
         return subprocess.check_output(
-            ['git', 'rev-parse', '--show-toplevel'],
-            stderr=subprocess.PIPE
+            ["git", "rev-parse", "--show-toplevel"], stderr=subprocess.PIPE
         ).rstrip()
     except subprocess.CalledProcessError:
         return None
 
+
 def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
     base_id = repo.merge_base(from_commit.id, to_commit.id)
 
-    cherrypick_re = re.compile('(cherry picked from commit|with child) ([0-9a-fA-F]+)')
+    cherrypick_re = re.compile("(cherry picked from commit|with child) ([0-9a-fA-F]+)")
     cherrypicked_commits = set()
 
     for commit in repo.walk(to_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
@@ -32,11 +34,15 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         for match in cherrypick_re.findall(commit.message):
             cherrypicked_commits.add(match[1])
 
-    user_names = set(repo.config.get_multivar('user.name'))
-    user_emails = set(repo.config.get_multivar('user.email'))
+    user_names = set(repo.config.get_multivar("user.name"))
+    user_emails = set(repo.config.get_multivar("user.email"))
+    #user_names = set(('Andrei Lapin',))
+    #user_emails = set(('alapin@nvidia.com', ))
 
     if not user_names and not user_emails and not show_all:
-        print('No user.name or user.email in git config, can not show user-specific commits')
+        print(
+            "No user.name or user.email in git config, can not show user-specific commits"
+        )
         sys.exit(1)
 
     for commit in repo.walk(from_commit.id, pygit2.GIT_SORT_TOPOLOGICAL):
@@ -44,30 +50,54 @@ def find_unpicked(repo, from_commit, to_commit, since_commit, show_all):
         if commit.id == base_id:
             break
 
-        if str(commit.id) not in cherrypicked_commits and \
-                (show_all or commit.author.name in user_names or
-                 commit.author.email in user_emails):
-            yield(commit)
+        picked = str(commit.id) in cherrypicked_commits
+        if (
+            show_all
+            or commit.author.name in user_names
+            or commit.author.email in user_emails
+        ):
+            yield (picked, commit)
 
         if since_commit and commit.id == since_commit.id:
             break
 
-def main():
-    parser = argparse.ArgumentParser(description='Show commits, eligible for cherry-picking')
-    parser.add_argument('branch', metavar='BRANCH', help='Name for the branch to check against',
-                        default='origin/master', nargs='?')
-    parser.add_argument('target_branch', metavar='TARGET_BRANCH', help='Name for the target branch',
-                        default='HEAD', nargs='?')
-    parser.add_argument('--since', metavar='COMMIT', help='Start checking since specified commit')
-    parser.add_argument('--show-dates', action='store_true', help='Show dates in %Y-%m-%d %H:%M:%S')
 
-    parser.add_argument('--all', action='store_true', help='Show commits from all users')
-    parser.add_argument('--always-colors', action='store_true', help='Always force colored output')
+def main():
+    parser = argparse.ArgumentParser(
+        description="Show commits, eligible for cherry-picking"
+    )
+    parser.add_argument(
+        "branch",
+        metavar="BRANCH",
+        help="Name for the branch to check against",
+        default="origin/master",
+        nargs="?",
+    )
+    parser.add_argument(
+        "target_branch",
+        metavar="TARGET_BRANCH",
+        help="Name for the target branch",
+        default="HEAD",
+        nargs="?",
+    )
+    parser.add_argument(
+        "--since", metavar="COMMIT", help="Start checking since specified commit"
+    )
+    parser.add_argument(
+        "--show-dates", action="store_true", help="Show dates in %Y-%m-%d %H:%M:%S"
+    )
+
+    parser.add_argument(
+        "--all", action="store_true", help="Show commits from all users"
+    )
+    parser.add_argument(
+        "--always-colors", action="store_true", help="Always force colored output"
+    )
 
     top = find_toplevel()
 
     if not top:
-        print('The current folder is not a valid git repository')
+        print("The current folder is not a valid git repository")
         sys.exit(1)
 
     args = parser.parse_args()
@@ -76,17 +106,20 @@ def main():
     try:
         from_commit = repo.revparse_single(args.branch)
     except:
-        print('Invalid branch %s' % args.branch)
+        print("Invalid branch %s" % args.branch)
         sys.exit(1)
 
     try:
         to_commit = repo.revparse_single(args.target_branch)
     except:
-        print('Invalid target branch %s' % args.target_branch)
+        print("Invalid target branch %s" % args.target_branch)
         sys.exit(1)
 
     if not repo.merge_base(from_commit.id, to_commit.id):
-        print('%s and %s does not have common ancestor' % (args.branch, args.target_branch))
+        print(
+            "%s and %s does not have common ancestor"
+            % (args.branch, args.target_branch)
+        )
         sys.exit(1)
 
     since_commit = None
@@ -94,37 +127,48 @@ def main():
         try:
             since_commit = repo.revparse_single(args.since)
         except:
-            print('Invalid since %s' % args.since)
+            print("Invalid since %s" % args.since)
             sys.exit(1)
 
-    author_format_str = ' | %s <%s>'
-    commit_format_str = '%s %s%s'
+    author_format_str = " | %s <%s>"
+    commit_format_str = "%s %s%s"
+    picked_format_str = "%s %s%s"
 
     if sys.stdout.isatty() or args.always_colors:
-        author_format_str = ' \033[31m| %s <%s>\033[0m'
-        commit_format_str = '\033[33m%s\033[0m %s%s'
+        author_format_str = " \033[31m| %s <%s>\033[0m"
+        commit_format_str = "\033[33m%s\033[0m %s%s"
+        picked_format_str = "\033[90m%s %s%s\033[0m"
 
-    seen = ''
+    seen = ""
     groups = []
     current_group = []
-    for commit in find_unpicked(repo, from_commit, to_commit, since_commit, args.all):
-        formatted_date = ''
+    for picked, commit in find_unpicked(
+        repo, from_commit, to_commit, since_commit, args.all
+    ):
+        formatted_date = ""
         if args.show_dates:
             timestamp = commit.commit_time  # commit timestamp
             offset = commit.commit_time_offset  # timezone offset in minutes
             commit_date = datetime.datetime.utcfromtimestamp(timestamp)
             commit_date += datetime.timedelta(minutes=offset)
-            formatted_date = commit_date.strftime('%Y-%m-%d %H:%M:%S') + ' - '
+            formatted_date = commit_date.strftime("%Y-%m-%d %H:%M:%S") + " - "
 
-        author_info = ''
+        author_info = ""
         if args.all:
             author_info = author_format_str % (commit.author.name, commit.author.email)
 
-        commit_msg = commit.message[:commit.message.index('\n')]
+        commit_msg = commit.message[: commit.message.index("\n")]
         indent = commit_msg in seen
         seen += commit.message
 
-        commit_string = formatted_date + (commit_format_str % (str(commit.id), commit_msg, author_info))
+        if picked:
+            commit_string = formatted_date + (
+                picked_format_str % (str(commit.id), commit_msg, author_info)
+            )
+        else:
+            commit_string = formatted_date + (
+                commit_format_str % (str(commit.id), commit_msg, author_info)
+            )
 
         if indent:
             current_group.append(commit_string)
@@ -139,16 +183,16 @@ def main():
     for group in groups:
         merge = group[0]
         child_commits = group[1:-1]
-        last_child_commit = group[-1] if len(group) > 1 else ''
+        last_child_commit = group[-1] if len(group) > 1 else ""
 
         print(merge)
 
         for child in child_commits:
-           print(" ├─ {}".format(child))
+            print(" ├─ {}".format(child))
 
         if last_child_commit:
-           print(" └─ {}".format(last_child_commit))
+            print(" └─ {}".format(last_child_commit))
 
 
-if __name__ == '__main__':
-        main()
+if __name__ == "__main__":
+    main()
