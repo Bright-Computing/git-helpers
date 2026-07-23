@@ -258,7 +258,7 @@ def main():
         author_info = ''
         if args.all:
             author_info = author_format_str % (commit.author.name, commit.author.email)
-        commit_msg = commit.message[:commit.message.index('\n')]
+        commit_msg = commit.message.partition('\n')[0]
         return commit_format_str % (hash_fn(commit.id), commit_msg, author_info)
 
     first_parent_set = build_first_parent_set(repo, from_commit, base_id)
