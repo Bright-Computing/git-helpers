@@ -1,0 +1,88 @@
+#!/bin/bash
+# Copyright 2017 Bright Computing Holding BV.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+# http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+USAGE="\
+git bc-diff-branch
+
+Generates the diff between 2 branches considering only the files
+modified from the common ancestor from the left commit and
+the right commit.
+
+Usage:
+    git bc-diff-branch [options]
+
+Options:
+    -s, --stat              Enable git diff stat feature
+    -l, --left              Left branch
+    -r, --right             Right branch
+
+
+"
+SCRIPT=`readlink -f $0`
+DIR=`dirname $SCRIPT`
+
+. $DIR/bc-env.sh
+
+
+STAT=0
+while [ $# -gt 0 ]; do
+    ARG=$1
+    case "$ARG" in
+    --help|-h)
+        HELP=1
+        ;;
+    --stat|-s)
+        shift
+        STAT=1
+        ;;
+    --left|-l)
+        shift
+        LEFT_COMMIT=$1
+        ;;
+    --right|-r)
+        shift
+        RIGHT_COMMIT=$1
+        ;;
+    --*)
+        die "unrecognised option: $ARG" ;;
+    esac
+    shift
+done
+
+if [ "$HELP" -eq 1 ] || [ -z "$LEFT_COMMIT" ] || [ -z "$RIGHT_COMMIT" ]; then
+    usage
+fi
+
+
+perform_diff() {
+    STAT=""
+    if [ "$1" -eq "1" ]; then
+        STAT="--stat"
+    fi
+
+    LEFT_COMMIT=$2
+    RIGHT_COMMIT=$3
+
+    COMMON_ANCESTOR=$(git merge-base $LEFT_COMMIT $RIGHT_COMMIT)
+    FILES=$(git show --pretty="" --name-only $COMMON_ANCESTOR..HEAD)
+
+    git diff $STAT $LEFT_COMMIT $RIGHT_COMMIT $FILES
+}
+
+perform_diff $STAT $LEFT_COMMIT $RIGHT_COMMIT
+
+
